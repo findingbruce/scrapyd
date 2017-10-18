@@ -151,3 +151,23 @@ class DeleteVersion(DeleteProject):
         self._delete_version(project, version)
         UtilsCache.invalid_cache(project)
         return {"node_name": self.root.nodename, "status": "ok"}
+
+class ScheduleAllSpider(WsResource):
+
+    def render_POST(self, txrequest):
+        ignore_spider = []
+        job_ids = []
+        args = native_stringify_dict(copy(txrequest.args), keys_only=False)
+        settings = args.pop('setting', [])
+        settings = dict(x.split('=', 1) for x in settings)
+        args = dict((k, v[0]) for k, v in args.items())
+        project = args.pop('project')
+        version = args.get('_version', '')
+        spiders = get_spider_list(project, version=version)
+        args['settings'] = settings
+        for spider_on_serv in spiders:
+            if not (spider_on_serv in ignore_spider):
+                args['_job'] = uuid.uuid1().hex
+                self.root.scheduler.schedule(project, spider_on_serv, **args)
+                job_ids.append({'spidername:':spider_on_serv, 'job_id': args['_job']})
+        return {"node_name": self.root.nodename, "status":"ok", "scheduled_jobs": job_ids}
